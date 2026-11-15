@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ml">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0b1324">
+<meta name="description" content="Zaman Repair Rally: സ്മാർട്ട്ഫോൺ ടെക്നോളജി ക്വിസ് കാർ റേസ്. Zaman Smartphone Repair Academy, Valanchery">
+<title>Zaman Repair Rally</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Malayalam:wght@400;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=1">
+<!-- Firebase (multiplayer rooms + chat) -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+<!-- ചോദ്യങ്ങൾ: Zaman Cricket Quiz-ലെ അതേ questions.js -->
+<script src="questions.js"></script>
+<script src="engine.js?v=1"></script>
+<script src="view.js?v=1"></script>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <img src="icon.svg" class="logo" alt="">
+      <div><b>ZAMAN</b><span class="bq"> REPAIR RALLY</span></div>
+    </div>
+    <div id="topRight" class="topright"></div>
+  </header>
+  <main>
+    <section id="chat" class="chatbox" hidden></section>
+    <section id="home"></section>
+    <section id="lobby" hidden></section>
+    <section id="game" hidden></section>
+    <section id="result" hidden></section>
+  </main>
+</div>
+<div id="pop" class="pop" hidden></div>
+<div id="toast" class="toast" hidden></div>
+<div id="sheet" class="sheet" hidden></div>
+<script src="app.js?v=1"></script>
+</body>
+</html>

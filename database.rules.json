@@ -1,0 +1,84 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "rooms": {
+      ".indexOn": [
+        "createdAt"
+      ],
+      ".read": "query.orderByChild === 'createdAt' && query.endAt != null && query.limitToFirst <= 25",
+      "$code": {
+        ".read": true,
+        ".write": "newData.exists() || !data.child('createdAt').exists() || data.child('createdAt').val() < now - 86400000",
+        ".validate": "$code.matches(/^[A-Z0-9]{6}$/) && newData.child('v').val() === 2 && newData.child('createdAt').isNumber() && newData.child('createdAt').val() <= now + 600000 && newData.child('host').isString() && newData.child('status').isString() && newData.child('players').hasChildren() && (!data.exists() || newData.child('createdAt').val() === data.child('createdAt').val())"
+      }
+    },
+    "chat": {
+      "$code": {
+        ".read": true,
+        ".write": "!newData.exists() && !root.child('rooms/' + $code).exists()",
+        "$msg": {
+          ".write": "(!data.exists() && newData.exists() && root.child('rooms/' + $code).exists() && root.child('rooms/' + $code + '/g/phase').val() !== 'bowlerAnswer' && root.child('rooms/' + $code + '/g/phase').val() !== 'bat' && root.child('rooms/' + $code + '/g/phase').val() !== 'judge') || (data.exists() && !newData.exists())",
+          ".validate": "newData.hasChildren(['pid', 'name', 'tm', 'text', 'ts'])",
+          "pid": {
+            ".validate": "newData.isString() && newData.val().length <= 40"
+          },
+          "name": {
+            ".validate": "newData.isString() && newData.val().length <= 24"
+          },
+          "tm": {
+            ".validate": "newData.isString() && newData.val().length <= 30"
+          },
+          "text": {
+            ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 300"
+          },
+          "ts": {
+            ".validate": "newData.isNumber() && newData.val() <= now"
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      }
+    },
+    "rallyRooms": {
+      ".indexOn": [
+        "createdAt"
+      ],
+      ".read": "query.orderByChild === 'createdAt' && query.endAt != null && query.limitToFirst <= 25",
+      "$code": {
+        ".read": true,
+        ".write": "newData.exists() || !data.child('createdAt').exists() || data.child('createdAt').val() < now - 86400000",
+        ".validate": "$code.matches(/^[A-Z0-9]{6}$/) && newData.child('v').val() === 1 && newData.child('createdAt').isNumber() && newData.child('createdAt').val() <= now + 600000 && newData.child('host').isString() && newData.child('status').isString() && newData.child('players').hasChildren() && !newData.child('g/order/11').exists() && (!data.exists() || newData.child('createdAt').val() === data.child('createdAt').val())"
+      }
+    },
+    "rallyChat": {
+      "$code": {
+        ".read": true,
+        ".write": "!newData.exists() && !root.child('rallyRooms/' + $code).exists()",
+        "$msg": {
+          ".write": "(!data.exists() && newData.exists() && root.child('rallyRooms/' + $code).exists() && !(root.child('rallyRooms/' + $code + '/status').val() === 'racing' && root.child('rallyRooms/' + $code + '/g/phase').val() === 'q')) || (data.exists() && !newData.exists())",
+          ".validate": "newData.hasChildren(['pid', 'name', 'tm', 'text', 'ts'])",
+          "pid": {
+            ".validate": "newData.isString() && newData.val().length <= 40"
+          },
+          "name": {
+            ".validate": "newData.isString() && newData.val().length <= 24"
+          },
+          "tm": {
+            ".validate": "newData.isString() && newData.val().length <= 30"
+          },
+          "text": {
+            ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 300"
+          },
+          "ts": {
+            ".validate": "newData.isNumber() && newData.val() <= now"
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      }
+    }
+  }
+}
