@@ -47,7 +47,14 @@ function speak(text) {
   } catch (e) {}
 }
 function speakQ(q) { if (!q) return; var n = ['ഒന്ന്', 'രണ്ട്', 'മൂന്ന്', 'നാല്', 'അഞ്ച്', 'ആറ്']; speak(q.q + '. ' + (q.o || []).map(function (o, i) { return (n[i] || (i + 1)) + ': ' + o; }).join('. ')); }
-function carSvg(c, w) { return '<svg class="carsvg" viewBox="0 0 64 30" width="' + (w || 40) + '" aria-hidden="true"><path d="M4 20 L8 12 Q10 10 14 10 L22 10 L28 4 Q30 3 33 3 L44 3 Q47 3 49 6 L53 11 L58 12 Q61 13 61 16 L61 21 Q61 23 59 23 L5 23 Q3 23 4 20Z" fill="' + c + '" stroke="rgba(0,0,0,.5)" stroke-width="1"/><path d="M30 5.5 L44 5.5 Q46 5.5 47 7 L50 11 L26 11Z" fill="#0d1522"/><circle cx="16" cy="23" r="5.5" fill="#151515"/><circle cx="16" cy="23" r="2.2" fill="#b8bec8"/><circle cx="49" cy="23" r="5.5" fill="#151515"/><circle cx="49" cy="23" r="2.2" fill="#b8bec8"/><rect x="57" y="14" width="3.5" height="2.5" fill="#fff3b0"/></svg>'; }
+// side view, FRONT ON THE RIGHT (direction of travel → finish): long hood + slanted windshield + headlight at the right, spoiler + red tail light at the left
+function carSvg(c, w) { return '<svg class="carsvg" viewBox="0 0 64 30" width="' + (w || 40) + '" aria-hidden="true">' +
+  '<rect x="4" y="8" width="2.4" height="5.5" fill="' + c + '" stroke="rgba(0,0,0,.55)" stroke-width=".6"/><path d="M0.5 6 H11 V9 H0.5Z" fill="' + c + '" stroke="rgba(0,0,0,.55)" stroke-width=".8"/>' +
+  '<path d="M3 22 V15 Q3 13 5 13 L14 12 L20 5 Q21 4 23 4 L34 4 Q36 4 38 6 L44 12 L57 13 Q61 14 61 18 V22 Q61 24 59 24 H5 Q3 24 3 22Z" fill="' + c + '" stroke="rgba(0,0,0,.55)" stroke-width="1"/>' +
+  '<path d="M17 12 L21.5 6.3 H28 V12Z" fill="#0d1522"/><path d="M30 6.3 H35.5 Q36.6 6.3 37.4 7.2 L41.6 12 H30Z" fill="#0d1522"/>' +
+  '<rect class="hl" x="57.5" y="15" width="3.5" height="3" rx="1" fill="#fff3b0" stroke="rgba(0,0,0,.4)" stroke-width=".5"/><rect class="tl" x="3" y="15" width="2.6" height="3" fill="#e53935"/>' +
+  '<path d="M56 21 H61.5" stroke="rgba(0,0,0,.45)" stroke-width="1.2"/>' +
+  '<circle cx="14" cy="24" r="5.2" fill="#151515"/><circle cx="14" cy="24" r="2" fill="#b8bec8"/><circle cx="50" cy="24" r="5.2" fill="#151515"/><circle cx="50" cy="24" r="2" fill="#b8bec8"/></svg>'; }
 
 // ------------------------------------------------------------ dispatch
 function dispatch(a, silent) {
@@ -453,7 +460,7 @@ function renderRaceBar(slide) {
     el.dataset.key = key;
     el.innerHTML = '<div class="rbhead"><span>START</span><span>ലാപ്പ് 2</span><span>ലാപ്പ് 3</span><span>🏁</span></div>' + g.order.map(function (id) {
       var p = r.players[id] || {};
-      return '<div class="lane' + (id === S.me ? ' me' : '') + '" data-id="' + esc(id) + '"><span class="ln">' + esc(p.name) + '</span><span class="lt"><i class="lm l1"></i><i class="lm l2"></i><span class="lcar">' + carSvg(col(p.col), 26) + '</span></span><span class="ls"></span></div>';
+      return '<div class="lane' + (id === S.me ? ' me' : '') + '" data-id="' + esc(id) + '"><span class="ln">' + esc(p.name) + '</span><span class="lt"><i class="lm l1"></i><i class="lm l2"></i><span class="lcar">' + carSvg(col(p.col), 34) + '</span></span><span class="ls"></span></div>';
     }).join('');
   }
   el.classList.toggle('slide', !!slide);
@@ -461,7 +468,7 @@ function renderRaceBar(slide) {
   g.order.forEach(function (id) {
     var row = el.querySelector('.lane[data-id="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]'); if (!row) return;
     var c = g.cars[id], pct = Math.max(0, Math.min(1, c.d / E.FINISH));
-    row.querySelector('.lcar').style.left = 'calc(' + (pct * 100) + '% - ' + (pct * 26) + 'px)';
+    row.querySelector('.lcar').style.left = 'calc(' + (pct * 100) + '% - ' + (pct * 34) + 'px)';
     row.querySelector('.ls').textContent = c.fin ? '🏁' + c.fin : c.pit ? '🔧' : String(c.d);
     row.classList.toggle('pit', !!c.pit);
   });
@@ -471,7 +478,7 @@ function renderLead() {
   $('#lead').innerHTML = '<div class="leadh">സ്ഥാനങ്ങൾ</div><div class="leadg">' + rank.map(function (id, i) {
     var p = r.players[id] || {}, c = g.cars[id], ch = prev ? prev.indexOf(id) - i : 0;
     var arrow = ch > 0 ? '<b class="up">▲' + ch + '</b>' : ch < 0 ? '<b class="dn">▼' + (-ch) + '</b>' : '<b class="eq">–</b>';
-    return '<div class="lr' + (id === S.me ? ' me' : '') + '"><span class="lp">' + (i + 1) + '</span><i style="background:' + col(p.col) + '"></i><span class="lnm">' + esc(p.name) + '</span><span class="ld">' + (c.fin ? '🏁' : c.d) + '</span>' + arrow + '</div>';
+    return '<div class="lr' + (id === S.me ? ' me' : '') + '"><span class="lp">' + (i + 1) + '</span>' + carSvg(col(p.col), 20) + '<span class="lnm">' + esc(p.name) + '</span><span class="ld">' + (c.fin ? '🏁' : c.d) + '</span>' + arrow + '</div>';
   }).join('') + '</div>';
 }
 function speedoHtml(x) {

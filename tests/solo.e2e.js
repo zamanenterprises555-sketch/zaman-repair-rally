@@ -5,7 +5,7 @@ const SH = process.env.SH || __dirname + '/../shots/'; const BOTS = +(process.en
 let fails = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); if (!c) fails++; };
 (async () => {
   const b = await chromium.launch({ executablePath: process.env.PWX, args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'] });
-  const c = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  const c = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true });
   await c.addInitScript(() => { localStorage.setItem('zrr_voice', 'false'); });
   const p = await c.newPage(); const errs = [];
   p.on('pageerror', e => errs.push(e.message)); p.on('console', m => { if (m.type() === 'error' && !/favicon|net::|fonts/.test(m.text())) errs.push(m.text()); });
@@ -52,7 +52,13 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); 
       await shot('v2-05-result-speedometer.png');
     }
     if (s.res && s.res.n && !gotNitro) { gotNitro = true; await p.waitForTimeout(500); s = await st(); ok(s.sfx === 'whoosh', 'nitro whoosh'); await shot('v2-06-nitro-result.png'); }
-    if (!gotArrow && rounds >= 3) { const arr = await p.$$eval('.lr b.up, .lr b.dn', x => x.length); if (arr > 0) { gotArrow = true; ok(true, 'leaderboard ▲/▼ change after checkpoint (' + arr + ')'); await p.waitForTimeout(400); await shot('v2-07-racebar-leaderboard.png'); } }
+    if (!gotArrow && rounds >= 3) { const arr = await p.$$eval('.lr b.up, .lr b.dn', x => x.length); if (arr > 0) { gotArrow = true; ok(true, 'leaderboard ▲/▼ change after checkpoint (' + arr + ')'); await p.waitForTimeout(400); await shot('v2-07-racebar-leaderboard.png');
+      const dir = await p.evaluate(() => { const g = ZRR.S.room.g, out = { noseRight: 0, lanes: 0, order: true }; const fin = document.querySelector('.rbhead span:last-child').getBoundingClientRect().x, start = document.querySelector('.rbhead span:first-child').getBoundingClientRect().x; out.finishRight = fin > start;
+        const xs = []; document.querySelectorAll('#racebar .lane').forEach(l => { out.lanes++; const hl = l.querySelector('.hl').getBoundingClientRect(), tl = l.querySelector('.tl').getBoundingClientRect(); if (hl.x > tl.x) out.noseRight++; xs.push([g.cars[l.dataset.id].d, l.querySelector('.lcar').getBoundingClientRect().x]); });
+        xs.sort((a, b) => a[0] - b[0]); for (let i = 1; i < xs.length; i++) if (xs[i][0] > xs[i - 1][0] && !(xs[i][1] > xs[i - 1][1])) out.order = false; return out; });
+      ok(dir.finishRight && dir.noseRight === dir.lanes, 'every car faces the finish (headlight on the right): ' + dir.noseRight + '/' + dir.lanes);
+      ok(dir.order, 'more distance = further toward the finish (right)');
+      await p.locator('#racebar').screenshot({ path: SH + 'v2-10-car-direction.png' }); } }
   }
   ok(gotNitro && gotArrow, 'nitro and leaderboard arrows seen');
   s = await until(s => s.status === 'finished', 30000); ok(s.status === 'finished', 'race finished after ' + (rounds + 2) + ' rounds');
