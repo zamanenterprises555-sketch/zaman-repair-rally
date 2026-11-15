@@ -17,18 +17,21 @@ ok(act({ type: 'start' }, 'p1').error, 'only host starts');
 act({ type: 'start', seed: 7 }, 'h'); ok(room.status === 'racing' && room.g.order.length === 11 && room.g.phase === 'count', 'race starts with 11 cars');
 ok(room.g.pool.length === 30 && room.g.pool.every(x => x.startsWith('OPTIONAL QUESTIONS 2')), 'pit questions come from the other set');
 ok(act({ type: 'go' }, 'h').error, 'countdown must finish'); t += E.COUNT_MS; act({ type: 'go' }, 'p5'); ok(room.g.phase === 'q' && room.g.r === 0, 'round 1 live');
+ok(room.g.startAt === room.g.qAt + 3000 && room.g.endAt === room.g.startAt + 10000, '3 s reading time before the 10 s answer timer');
+ok(act({ type: 'answer', i: 0, t: 0 }, 'p6').error, 'answers disabled during reading time'); t += E.READ_MS;
 // round 1: h fast correct, p1 wrong, others time out
 const a0 = E.questionFor(room, 'h', QS).q.a;
 act({ type: 'answer', i: a0, t: 1.2 }, 'h'); act({ type: 'answer', i: (a0 + 1) % 4, t: 2 }, 'p1');
 ok(act({ type: 'answer', i: a0, t: 1 }, 'h').error, 'one answer per round');
 ok(act({ type: 'resolve' }, 'h').error, 'waits for everyone (or time out)');
 t += 10000 + E.GRACE_MS; act({ type: 'resolve' }, 'p2');
+ok(room.g.prank.length === 11, 'previous positions saved for ▲/▼');
 ok(room.g.cars.h.d === 5 && room.g.res.h.k === 'ok', 'fast correct = 5 steps');
 ok(room.g.cars.p1.pit === 1 && room.g.res.p1.k === 'wrong' && room.g.cars.p1.d === 0, 'wrong = breakdown, car stops');
 ok(room.g.res.p2.k === 'to' && room.g.cars.p2.pit === 1, 'time out = breakdown');
 ok(room.g.miss.p1.length === 1 && room.g.miss.p1[0].c === (a0 + 1) % 4, 'wrong answer saved for review');
 ok(act({ type: 'next' }, 'h').error, 'reveal waits'); t += E.REVEAL_MS; act({ type: 'next' }, 'h');
-ok(room.g.r === 1 && room.g.phase === 'q', 'round 2');
+ok(room.g.r === 1 && room.g.phase === 'q' && room.g.startAt === room.g.qAt + 3000, 'round 2 (pit questions get reading time too)'); t += E.READ_MS;
 const pq = E.questionFor(room, 'p1', QS); ok(pq.pit && pq.s === 'OPTIONAL QUESTIONS 2', 'pit car gets a repair question');
 const pq2 = E.questionFor(room, 'p2', QS); ok(pq2.i !== pq.i, 'each pit car gets its own repair question');
 act({ type: 'answer', i: pq.q.a, t: 3 }, 'p1');
@@ -38,12 +41,12 @@ ok(room.g.cars.p2.pit === 1 && room.g.res.p2.k === 'pitfail', 'pit repair missed
 // solo full race with nitro and finish
 t = 5000; room = E.newRoom({ code: 'SOLO01', pid: 'me', name: 'Me', now: t, solo: true });
 room.players.b1 = { name: 'B1', role: 'r', col: 1, bot: true, online: true, joinedAt: t + 1 };
-act({ type: 'start', seed: 3 }, 'solo'); t += E.COUNT_MS; act({ type: 'go' }, 'solo');
+act({ type: 'start', seed: 3 }, 'solo'); t += E.COUNT_MS; act({ type: 'go' }, 'solo'); t += E.READ_MS;
 let nitroSeen = 0, rounds = 0;
 let guard = 0; while (room.status === 'racing' && guard++ < 300) {
   const g = room.g;
   if (g.phase === 'q') { const x = E.questionFor(room, 'me', QS); if (!g.cars.me.fin) act({ type: 'answer', pid: 'me', i: x.q.a, t: 1 }, 'solo'); var rr = act({ type: 'resolve', bots: { b1: { r: g.r, i: (x.q.a + 1) % 4, t: 3 } } }, 'solo'); if (rr.error) { console.log('resolve err', rr.error, g.r, JSON.stringify(g.cars.me)); break; } if (room.g.res.me && room.g.res.me.n) nitroSeen++; rounds++; }
-  else if (g.phase === 'rev') { t += E.REVEAL_MS; act({ type: 'next' }, 'solo'); }
+  else if (g.phase === 'rev') { t += E.REVEAL_MS; act({ type: 'next' }, 'solo'); t += E.READ_MS; }
   else break;
 }
 ok(nitroSeen >= 3, 'nitro after every 3 correct in a row: ' + nitroSeen);

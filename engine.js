@@ -7,7 +7,7 @@
   'use strict';
   var LAPS = 3, CPS = 10, ROUNDS = LAPS * CPS, LAP_STEPS = 50, FINISH = LAPS * LAP_STEPS;
   var MAX_RACERS = 11, MIN_RACERS = 2, SET_SIZE = 30, MAX_PLAYERS = 40;
-  var REVEAL_MS = 3800, COUNT_MS = 3500, GRACE_MS = 600;
+  var REVEAL_MS = 4500, COUNT_MS = 3000, GRACE_MS = 600, READ_MS = 3000; // READ_MS: calm reading time before the answer timer starts
   var NITRO_EVERY = 3, NITRO_BONUS = 3, NITRO_COST = 12, NITRO_MIN = 15;
   var BAT_START = 100, BAT_DRIVE = 4, BAT_OK = 6, BAT_TOPIC = 14, BAT_WRONG = 15, BAT_LOW = 20, BAT_PIT = 60;
   // Same set types and time limits as the cricket quiz.
@@ -76,7 +76,7 @@
     Object.keys(room.players).forEach(function (id) { var p = room.players[id]; if (!p.role) p.role = 's'; if (p.col == null) p.col = 0; });
     var g = room.g;
     if (g) {
-      g.order = g.order || []; g.cars = g.cars || {}; g.ans = g.ans || {}; g.res = g.res || {}; g.miss = g.miss || {}; g.pool = g.pool || []; g.pq = g.pq || {}; g.qo = g.qo || []; g.qp = g.qp || []; g.pp = g.pp || [];
+      g.order = g.order || []; g.cars = g.cars || {}; g.ans = g.ans || {}; g.res = g.res || {}; g.miss = g.miss || {}; g.pool = g.pool || []; g.pq = g.pq || {}; g.prank = g.prank || []; g.qo = g.qo || []; g.qp = g.qp || []; g.pp = g.pp || [];
       g.order.forEach(function (id) {
         var c = g.cars[id] = g.cars[id] || {};
         ['d', 'st', 'pit', 'fin', 'ok', 'tt', 'nit', 'brk', 'lane'].forEach(function (k) { c[k] = c[k] || 0; });
@@ -124,8 +124,9 @@
       return B.d - A.d || B.ok - A.ok || A.tt - B.tt || (a < b ? -1 : 1);
     });
   }
-  function startRound(g) {
-    g.phase = 'q'; g.ans = {}; g.pq = {};
+  // base = when the question appears; answers open (and the timer starts) READ_MS later
+  function startRound(g, base) {
+    g.phase = 'q'; g.ans = {}; g.pq = {}; g.qAt = base; g.startAt = base + READ_MS;
     g.order.forEach(function (id) { var c = g.cars[id]; if (c.pit && !c.fin) g.pq[id] = g.pptr++; });
     g.endAt = g.startAt + g.limit * 1000;
   }
@@ -186,10 +187,11 @@
     if (!g) return err('റേസ് ഇല്ല');
     if (t === 'go') {
       if (g.phase !== 'count' || nowT < g.startAt - 50) return err('wait');
-      startRound(g); g.seq++; return { room: room };
+      startRound(g, g.startAt); g.seq++; return { room: room };
     }
     if (t === 'answer') {
       if (g.phase !== 'q') return err('സമയം കഴിഞ്ഞു');
+      if (nowT < g.startAt - 250) return err('ആദ്യം ചോദ്യം വായിക്കൂ');
       var aw = (a.by === 'solo' && a.pid) ? a.pid : a.by;
       var c0 = g.cars[aw]; if (!c0 || c0.fin) return err('?');
       if (answered(room, aw)) return err('ഉത്തരം നൽകിക്കഴിഞ്ഞു');
@@ -200,13 +202,14 @@
       if (g.phase !== 'q') return err('wait');
       if (!(allAnswered(room) || nowT >= g.endAt + GRACE_MS)) return err('wait');
       var bots = a.bots || {};
+      g.prank = ranking(room);
       var res = {}, finishers = [];
       g.order.forEach(function (id) {
         var c = g.cars[id]; if (c.fin) return;
         var x = questionFor(room, id, qs), q = x.q;
         var an = (P[id] && P[id].bot) ? bots[id] : g.ans[id];
         if (an && an.r != null && an.r !== g.r) an = null;
-        var tm = an ? +an.t : g.limit + 1, ch = an ? +an.i : -1;
+        var tm = an ? Math.max(0, +an.t) : g.limit + 1, ch = an ? +an.i : -1;
         var correct = !!(an && q && ch === q.a && tm <= g.limit + 0.5);
         tm = Math.min(tm, g.limit + 1);
         var r = { k: '', d: 0, c: ch, s: x.s, i: x.i, pm: x.pm || '' };
@@ -241,7 +244,7 @@
     if (t === 'next') {
       if (g.phase !== 'rev' || nowT < g.revEnd - 50) return err('wait');
       if (g.over) { room.status = 'finished'; g.phase = 'done'; g.rank = ranking(room); g.seq++; return { room: room }; }
-      g.r++; g.startAt = g.revEnd; startRound(g); g.seq++;
+      g.r++; startRound(g, g.revEnd); g.seq++;
       return { room: room };
     }
     if (t === 'reset') {
@@ -253,7 +256,7 @@
 
   var api = {
     LAPS: LAPS, CPS: CPS, ROUNDS: ROUNDS, LAP_STEPS: LAP_STEPS, FINISH: FINISH, MAX_RACERS: MAX_RACERS, MIN_RACERS: MIN_RACERS, SET_SIZE: SET_SIZE,
-    REVEAL_MS: REVEAL_MS, COUNT_MS: COUNT_MS, GRACE_MS: GRACE_MS, NITRO_EVERY: NITRO_EVERY, NITRO_BONUS: NITRO_BONUS, BAT_LOW: BAT_LOW, BAT_PIT: BAT_PIT,
+    REVEAL_MS: REVEAL_MS, COUNT_MS: COUNT_MS, GRACE_MS: GRACE_MS, READ_MS: READ_MS, NITRO_EVERY: NITRO_EVERY, NITRO_BONUS: NITRO_BONUS, BAT_LOW: BAT_LOW, BAT_PIT: BAT_PIT,
     COLORS: COLORS, COLOR_ML: COLOR_ML, SET_TYPES: SET_TYPES,
     setType: setType, limitFor: limitFor, stepsFor: stepsFor, bands: bands, isMcq: isMcq, listSets: listSets, setPlayable: setPlayable,
     newRoom: newRoom, normalize: normalize, reduce: reduce, racerIds: racerIds, ranking: ranking, questionFor: questionFor, qOf: qOf, permute: permute,

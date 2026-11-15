@@ -1,4 +1,4 @@
-/* Zaman Repair Rally v1 - UI, rooms (Firebase RTDB: rallyRooms/, rallyChat/), Solo, 3D view.
+/* Zaman Repair Rally v2 - UI, rooms (Firebase RTDB: rallyRooms/, rallyChat/), Solo, calm race bar + sounds.
  * Race rules are in engine.js, questions in questions.js (same file as the cricket quiz). */
 (function () {
 'use strict';
@@ -24,7 +24,7 @@ var LS = {
   set: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
   del: function (k) { try { localStorage.removeItem(k); } catch (e) {} }
 };
-var S = { room: null, me: null, solo: false, ref: null, code: null, offset: 0, chat: [], chatUnread: 0, chatOpen: false, view: null, viewMode: null, spokenSeq: null, popSeq: null, panelKey: '', tick: null, tryAt: {}, homeSet: null, mySel: null };
+var S = { room: null, me: null, solo: false, ref: null, code: null, offset: 0, chat: [], chatUnread: 0, chatOpen: false, wasReading: null, spokenSeq: null, popSeq: null, panelKey: '', tick: null, tryAt: {}, homeSet: null, mySel: null };
 function chatLocked() { var g = S.room && S.room.g; return !!(S.room && S.room.status === 'racing' && g && g.phase === 'q'); }
 window.ZRR = { S: S, E: E, chatLocked: chatLocked };
 
@@ -255,6 +255,7 @@ function resumeSolo() { var r = LS.get('zrr_solo'); if (!r) return; disconnect()
 function answer(i) {
   var r = S.room, g = r && r.g; if (!g || g.phase !== 'q') return;
   var c = g.cars[S.me]; if (!c || c.fin || E.answered(r, S.me)) return;
+  if (serverNow() < g.startAt) return; // reading time
   var t = Math.max(0, (serverNow() - g.startAt) / 1000);
   S.mySel = { r: g.r, i: i };
   try { speechSynthesis.cancel(); } catch (e) {}
@@ -277,9 +278,12 @@ function tick() {
   var r = S.room; if (!r || r.status !== 'racing' || !r.g) return;
   var g = r.g, now = serverNow();
   if (g.phase === 'count') {
-    var left = Math.ceil((g.startAt - now) / 1000), el = $('#countBig'); if (el) el.textContent = left > 0 ? left : 'GO!';
+    var left = Math.ceil((g.startAt - now) / 1000), el = $('#countN'); if (el) el.textContent = left > 0 ? left : '…';
     if (now >= g.startAt) tryStep('go');
   } else if (g.phase === 'q') {
+    var reading = now < g.startAt;
+    if (reading !== S.wasReading) { S.wasReading = reading; S.panelKey = ''; renderPanel(); return; }
+    if (reading) { var rn = $('#readN'); if (rn) rn.textContent = Math.max(1, Math.ceil((g.startAt - now) / 1000)); return; }
     var rem = (g.endAt - now) / 1000, L = g.limit;
     var n = $('#tnum'); if (n) n.textContent = fmtT(rem);
     var arc = $('#tarc'); if (arc) { var f = Math.max(0, Math.min(1, rem / L)); arc.setAttribute('stroke-dashoffset', String(276.5 * (1 - f))); arc.setAttribute('stroke', f > 0.5 ? '#19b46b' : f > 0.25 ? '#f5b301' : '#e5484d'); }
@@ -290,51 +294,49 @@ function tick() {
   }
 }
 
-// ------------------------------------------------------------ race view (3D / lite)
-function wantMode() { var m = LS.get('zrr_mode', null); if (m) return m; return window.RaceView && RaceView.webglOk() ? '3d' : 'lite'; }
-var threeP = null;
-function loadThree() {
-  if (window.THREE) return Promise.resolve();
-  if (!threeP) threeP = new Promise(function (ok, bad) { var s = document.createElement('script'); s.src = 'vendor/three.min.js'; s.onload = ok; s.onerror = bad; document.head.appendChild(s); });
-  return threeP;
+// ------------------------------------------------------------ engine sounds (Web Audio, made in code, no files)
+function soundOn() { return LS.get('zrr_sound', true); }
+var AC = null;
+function audio() {
+  if (!AC) { try { var C = window.AudioContext || window.webkitAudioContext; if (C) AC = new C(); } catch (e) { AC = null; } }
+  if (AC && AC.state === 'suspended') { try { AC.resume(); } catch (e) {} }
+  return AC;
 }
-function ensureView() {
-  var host = $('#track'); if (!host) return;
-  var mode = wantMode();
-  if (S.view && S.viewMode === mode && host.contains(document.querySelector('#track .race-canvas'))) return;
-  if (S.view) { S.view.destroy(); S.view = null; }
-  S.viewMode = mode;
-  var mk = function (m) {
-    S.view = RaceView.create(host, m, {
-      onFail: function () { toast('ഈ ഫോണിൽ 3D ഇല്ല. ലൈറ്റ് മോഡ് ഉപയോഗിക്കുന്നു'); LS.set('zrr_mode', 'lite'); S.viewMode = 'lite'; },
-      onLowFps: function (f) { if (LS.get('zrr_fpsask', 0)) return; lowFpsSheet(f); }
-    });
-    S.viewMode = S.view.mode; pushView(); renderViewBtns();
-  };
-  if (mode === '3d') loadThree().then(function () { if (S.viewMode === '3d' && !S.view) mk('3d'); }).catch(function () { LS.set('zrr_mode', 'lite'); mk('lite'); toast('3D ലോഡ് ആയില്ല. ലൈറ്റ് മോഡ്'); });
-  else mk('lite');
+function noiseBuf(ac, sec) { var b = ac.createBuffer(1, Math.floor(ac.sampleRate * sec), ac.sampleRate), d = b.getChannelData(0); for (var i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; return b; }
+function sfx(kind) {
+  if (!soundOn()) return; var ac = audio(); if (!ac) return;
+  try {
+    var t = ac.currentTime + 0.02, out = ac.createGain(); out.gain.value = 0.32; out.connect(ac.destination);
+    if (kind === 'vroom') { // short engine rev
+      var o = ac.createOscillator(), o2 = ac.createOscillator(), f = ac.createBiquadFilter(), g = ac.createGain();
+      o.type = 'sawtooth'; o2.type = 'square'; f.type = 'lowpass'; f.frequency.setValueAtTime(500, t); f.frequency.linearRampToValueAtTime(1400, t + 0.35);
+      o.frequency.setValueAtTime(70, t); o.frequency.exponentialRampToValueAtTime(190, t + 0.35); o.frequency.exponentialRampToValueAtTime(120, t + 0.7);
+      o2.frequency.setValueAtTime(35, t); o2.frequency.exponentialRampToValueAtTime(95, t + 0.35); o2.frequency.exponentialRampToValueAtTime(60, t + 0.7);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.9, t + 0.06); g.gain.setValueAtTime(0.9, t + 0.4); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.75);
+      o.connect(f); o2.connect(f); f.connect(g); g.connect(out); o.start(t); o2.start(t); o.stop(t + 0.8); o2.stop(t + 0.8);
+    } else if (kind === 'sputter') { // breakdown "tuk tuk"
+      [0, 0.17, 0.34, 0.56].forEach(function (d, i) {
+        var o = ac.createOscillator(), g = ac.createGain(), f = ac.createBiquadFilter(); o.type = 'square'; f.type = 'lowpass'; f.frequency.value = 420;
+        o.frequency.setValueAtTime(i === 3 ? 48 : 62, t + d); o.frequency.exponentialRampToValueAtTime(38, t + d + 0.1);
+        g.gain.setValueAtTime(0.0001, t + d); g.gain.exponentialRampToValueAtTime(i === 3 ? 0.5 : 0.85, t + d + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.12);
+        o.connect(f); f.connect(g); g.connect(out); o.start(t + d); o.stop(t + d + 0.14);
+      });
+    } else if (kind === 'whoosh') { // small nitro whoosh
+      var n = ac.createBufferSource(), bp = ac.createBiquadFilter(), g2 = ac.createGain(); n.buffer = noiseBuf(ac, 0.7);
+      bp.type = 'bandpass'; bp.Q.value = 1.2; bp.frequency.setValueAtTime(500, t); bp.frequency.exponentialRampToValueAtTime(3500, t + 0.45);
+      g2.gain.setValueAtTime(0.0001, t); g2.gain.exponentialRampToValueAtTime(0.7, t + 0.12); g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
+      n.connect(bp); bp.connect(g2); g2.connect(out); n.start(t); n.stop(t + 0.7);
+    } else if (kind === 'fix') { // repair done: two soft clicks
+      [0, 0.12].forEach(function (d) { var o = ac.createOscillator(), g = ac.createGain(); o.type = 'triangle'; o.frequency.value = 880; g.gain.setValueAtTime(0.0001, t + d); g.gain.exponentialRampToValueAtTime(0.4, t + d + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.09); o.connect(g); g.connect(out); o.start(t + d); o.stop(t + d + 0.1); });
+    }
+    window.ZRR.lastSfx = kind; (window.ZRR.sfxLog = window.ZRR.sfxLog || []).push(kind + '@' + (S.room && S.room.g ? S.room.g.phase : '-'));
+  } catch (e) {}
 }
-function lowFpsSheet(f) {
-  var sh = $('#sheet');
-  sh.innerHTML = '<div class="sheetin"><h3>⚡ ഈ ഫോണിൽ 3D പതുക്കെയാണ്</h3><p class="mut">ഇപ്പോൾ ' + Math.round(f) + ' FPS മാത്രം. ലൈറ്റ് മോഡിൽ (2D) കളി വേഗത്തിലും സുഗമമായും ഓടും. നിയമങ്ങൾ എല്ലാം ഒന്നുതന്നെ.</p>' +
-    '<button class="btn" data-act="toLite">ലൈറ്റ് മോഡിലേക്ക് മാറുക</button><button class="btn sec" data-act="keep3d">3D തന്നെ മതി</button></div>';
-  sh.hidden = false;
-}
-function setMode(m) { LS.set('zrr_mode', m); if (S.view) { S.view.destroy(); S.view = null; } S.viewMode = null; render(); }
-function pushView() {
-  if (!S.view || !S.room || !S.room.g) return;
-  var r = S.room, g = r.g, n = g.order.length, isR = !!g.cars[S.me];
-  S.view.update({
-    seq: g.seq, phase: g.phase, res: g.phase === 'rev' || g.phase === 'done' ? g.res : {},
-    focus: isR ? S.me : E.ranking(r)[0],
-    cars: g.order.map(function (id) { var c = g.cars[id], p = r.players[id] || {}; return { id: id, name: p.name || '—', col: col(p.col), lane: c.lane, n: n, d: c.d, pit: c.pit, fin: c.fin, me: id === S.me }; })
-  });
-}
-function renderViewBtns() {
-  var b = $('#viewBtns'); if (!b) return;
-  var m = S.viewMode, cm = S.view && S.view.cam ? S.view.cam() : 'follow';
-  b.innerHTML = (m === '3d' ? '<button class="vbtn" data-act="cam">' + (cm === 'follow' ? '🗺️ മുഴുവൻ ട്രാക്ക്' : '🎥 എന്റെ കാർ') + '</button>' : '') +
-    '<button class="vbtn" data-act="mode">' + (m === '3d' ? '⚡ ലൈറ്റ് മോഡ്' : '🎮 3D മോഡ്') + '</button>';
+function resultSound() {
+  var x = S.room.g.res[S.me]; if (!x) return;
+  if (x.k === 'ok') { sfx('vroom'); if (x.n) setTimeout(function () { sfx('whoosh'); }, 250); }
+  else if (x.k === 'wrong' || x.k === 'to') sfx('sputter');
+  else if (x.k === 'fix') sfx('fix');
 }
 
 // ------------------------------------------------------------ render
@@ -343,15 +345,15 @@ function render() {
   document.body.classList.toggle('inroom', !!S.room);
   renderTop();
   var r = S.room;
-  if (!r) { if (S.view) { S.view.destroy(); S.view = null; } show('home'); renderHome(); renderChat(); return; }
-  if (r.status === 'lobby') { if (S.view) { S.view.destroy(); S.view = null; } show('lobby'); renderLobby(); }
+  if (!r) { show('home'); renderHome(); renderChat(); return; }
+  if (r.status === 'lobby') { show('lobby'); renderLobby(); }
   else if (r.status === 'racing') { show('game'); renderGame(); }
   else { show('result'); renderResult(); }
   renderChat();
 }
 function renderTop() {
   var r = S.room, h = '';
-  h += '<button class="chip" data-act="voice" title="ശബ്ദം">' + (voiceOn() ? '🔊' : '🔇') + '</button>';
+  h += '<button class="chip" data-act="sound" title="എഞ്ചിൻ ശബ്ദം">' + (soundOn() ? '🔊' : '🔇') + '</button><button class="chip' + (voiceOn() ? '' : ' off') + '" data-act="voice" title="ചോദ്യം വായിക്കൽ">🗣️</button>';
   if (r && !S.solo) h += '<span class="chip gold">' + esc(r.code) + '</span><button class="chip" id="chatBtn" data-act="chatToggle">💬<b id="chatBadge" class="badge" hidden>0</b></button>';
   if (r && S.solo) h += '<span class="chip green">സോളോ</span>';
   $('#topRight').innerHTML = h;
@@ -382,7 +384,7 @@ function renderHome() {
   var ses = LS.get('zrr_session'), solo = LS.get('zrr_solo'), name = LS.get('zrr_name', '');
   var pre = (new URLSearchParams(location.search)).get('room') || '';
   if (!S.homeSet || !E.setPlayable(QS, S.homeSet)) S.homeSet = firstPlayable();
-  var nb = LS.get('zrr_bots', 3), mode = wantMode();
+  var nb = LS.get('zrr_bots', 3);
   var h = '<div class="hero"><div class="heroCar">' + carSvg('#e53935', 120) + '</div><h1>ZAMAN <span>REPAIR RALLY</span></h1><p>സ്മാർട്ട്ഫോൺ ടെക്നോളജി ക്വിസ് കാർ റേസ് 🏁</p></div>';
   if (ses && ses.code && db) h += '<div class="card rejoin"><b>🔁 നിങ്ങളുടെ റൂം: ' + esc(ses.code) + '</b><button class="btn" data-act="rejoin">തിരികെ റേസിലേക്ക്</button><button class="btn sec sm" data-act="forget" style="margin-top:8px">മറക്കുക</button></div>';
   if (solo && solo.status === 'racing') h += '<div class="card rejoin"><b>🔁 സോളോ റേസ് പാതിയിലാണ്</b><button class="btn" data-act="resumeSolo">സോളോ തുടരുക</button></div>';
@@ -394,10 +396,9 @@ function renderHome() {
     '<label class="lbl">കമ്പ്യൂട്ടർ കാറുകൾ (0–10)</label><select id="soloBots">' + [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(function (i) { return '<option value="' + i + '"' + (i === nb ? ' selected' : '') + '>' + i + (i === 10 ? ' (ആകെ 11 കാർ)' : '') + '</option>'; }).join('') + '</select>' +
     '<label class="lbl">ചോദ്യ സെറ്റ്</label>' + setPicker(S.homeSet, true, 'homeSet') +
     '<button class="btn gold" data-act="solo">സോളോ റേസ് തുടങ്ങുക</button></div>';
-  h += '<div class="card"><h3>⚙️ ക്രമീകരണം</h3><div class="row"><button class="btn ' + (mode === '3d' ? '' : 'sec') + ' sm" data-act="setMode" data-m="3d">🎮 3D</button><button class="btn ' + (mode === 'lite' ? '' : 'sec') + ' sm" data-act="setMode" data-m="lite">⚡ ലൈറ്റ് മോഡ് (2D)</button></div>' +
-    '<p class="small" style="margin-top:6px">പഴയ / വിലകുറഞ്ഞ ഫോണിൽ ലൈറ്റ് മോഡ് നല്ലത്.</p>' +
-    '<div class="row" style="margin-top:8px"><button class="btn ' + (voiceOn() ? '' : 'sec') + ' sm" data-act="voice">' + (voiceOn() ? '🔊 ചോദ്യം വായിക്കും' : '🔇 ശബ്ദം ഓഫ്') + '</button></div>' +
-    (('speechSynthesis' in window) && !mlVoice() ? '<p class="small">ഈ ഫോണിൽ മലയാളം ശബ്ദം കണ്ടില്ല. ഉണ്ടെങ്കിൽ മാത്രം വായിക്കും.</p>' : '') + '</div>';
+  h += '<div class="card"><h3>⚙️ ക്രമീകരണം</h3><div class="row"><button class="btn ' + (soundOn() ? '' : 'sec') + ' sm" data-act="sound">' + (soundOn() ? '🔊 എഞ്ചിൻ ശബ്ദം: ഓൺ' : '🔇 എഞ്ചിൻ ശബ്ദം: ഓഫ്') + '</button></div>' +
+    '<div class="row" style="margin-top:8px"><button class="btn ' + (voiceOn() ? '' : 'sec') + ' sm" data-act="voice">' + (voiceOn() ? '🗣️ ചോദ്യം വായിക്കും' : '🗣️ ചോദ്യം വായിക്കില്ല') + '</button></div>' +
+    (('speechSynthesis' in window) && !mlVoice() ? '<p class="small">ഈ ഫോണിൽ മലയാളം ശബ്ദം കണ്ടില്ല. ഉണ്ടെങ്കിൽ മാത്രം വായിക്കും.</p>' : '') + '<p class="small">എഞ്ചിൻ ശബ്ദം ഫലം വരുമ്പോൾ മാത്രം, ചോദ്യ സമയത്ത് ഇല്ല.</p></div>';
   h += rulesHtml() + academyBtn() + '<p class="small foot">© Zaman Enterprises, Valanchery · ചോദ്യങ്ങൾ: Zaman Cricket Quiz</p>';
   $('#home').innerHTML = h;
 }
@@ -424,39 +425,62 @@ function myCar() { var g = S.room.g; return g.cars[S.me] || null; }
 function lapCp(g) { var r = Math.min(g.r, E.ROUNDS - 1); return { lap: Math.floor(r / E.CPS) + 1, cp: r % E.CPS + 1 }; }
 function renderGame() {
   var r = S.room, g = r.g;
-  if (!$('#track')) {
-    $('#game').innerHTML = '<div class="trackwrap"><div id="track"></div><div id="hud"></div><div id="viewBtns" class="viewbtns"></div><div id="countWrap" class="countwrap" hidden><div id="countBig">3</div></div></div><div id="stand" class="stand"></div><div id="panel"></div>';
-  }
-  var tw = document.querySelector('.trackwrap'); if (tw) tw.classList.toggle('compact', g.phase === 'q');
-  ensureView(); pushView(); renderViewBtns(); renderHud(); renderStand(); renderPanel();
-  $('#countWrap').hidden = g.phase !== 'count';
-  // read the question aloud once per round
-  if (g.phase === 'q' && S.spokenSeq !== g.seq) {
+  if (!$('#lapline')) $('#game').innerHTML = '<div id="lapline" class="lapline"></div><div id="panel"></div><div id="board"><div id="racebar" class="card racebar"></div><div id="lead" class="card lead"></div></div><div id="gameFoot"></div>';
+  var qLive = g.phase === 'q';
+  renderLapline();
+  // the question gets full focus: race bar + leaderboard are hidden while it is on screen
+  var bd = $('#board'), wasHidden = bd.hidden; bd.hidden = qLive;
+  if (!qLive) { renderRaceBar(wasHidden && g.phase === 'rev'); renderLead(); }
+  renderPanel();
+  if (qLive && S.spokenSeq !== g.seq) {
     S.spokenSeq = g.seq; try { window.scrollTo(0, 0); } catch (e) {}
     var x = E.questionFor(r, g.cars[S.me] && !g.cars[S.me].fin ? S.me : g.order[0], QS);
     if (x) speakQ(x.q);
   }
-  if (g.phase === 'rev' && S.popSeq !== g.seq) { S.popSeq = g.seq; resultPop(); }
+  if (g.phase === 'rev' && S.popSeq !== g.seq) { S.popSeq = g.seq; try { window.scrollTo(0, 0); } catch (e) {} resultSound(); }
 }
-function renderHud() {
+function renderLapline() {
   var r = S.room, g = r.g, c = myCar(), lc = lapCp(g), rank = E.ranking(r), pos = rank.indexOf(S.me) + 1;
-  var h = '<div class="hud-l"><b>ലാപ്പ് ' + lc.lap + '/' + E.LAPS + '</b><span>ചെക്ക്പോയിന്റ് ' + lc.cp + '/' + E.CPS + '</span></div>';
-  if (c) {
-    var bcls = c.b < E.BAT_LOW ? 'low' : c.b < 50 ? 'mid' : '';
-    h += '<div class="hud-r"><b>' + (c.fin ? '🏁 ' : '') + pos + '<small>/' + g.order.length + '</small></b><span>സ്ഥാനം</span></div>';
-    h += '<div class="hud-b"><div class="bat ' + bcls + '"><i style="width:' + Math.max(0, Math.min(100, c.b)) + '%"></i><span>🔋 ബാറ്ററി ' + Math.round(c.b) + '%</span></div>' +
-      '<div class="nitrob" title="നൈട്രോ">' + [0, 1, 2].map(function (k) { return '<i class="' + (k < (c.st % 3) ? 'on' : '') + '"></i>'; }).join('') + '<span>🔥' + (c.nit || 0) + '</span></div></div>';
-  } else h += '<div class="hud-r"><b>👀</b><span>കാണി</span></div>';
-  $('#hud').innerHTML = h;
+  var h = '<span class="lc">🏁 ലാപ്പ് ' + lc.lap + '/' + E.LAPS + ' · ചെക്ക്പോയിന്റ് ' + lc.cp + '/' + E.CPS + '</span>';
+  if (c) h += '<span class="mini"><b>' + pos + '</b>/' + g.order.length + '</span><span class="mini ' + (c.b < E.BAT_LOW ? 'low' : '') + '">🔋' + Math.round(c.b) + '%</span><span class="mini">🔥' + [0, 1, 2].map(function (k) { return k < (c.st % 3) ? '●' : '○'; }).join('') + '</span>';
+  else h += '<span class="mini">👀 കാണി</span>';
+  $('#lapline').innerHTML = h;
 }
-function renderStand() {
-  var r = S.room, g = r.g, rank = E.ranking(r);
-  $('#stand').innerHTML = rank.map(function (id, i) {
-    var c = g.cars[id], p = r.players[id] || {}, lap = Math.min(E.LAPS, Math.floor(c.d / E.LAP_STEPS) + 1);
-    var ic = c.fin ? '🏁' : c.pit ? '🔧' : (g.phase === 'rev' && g.res[id] && g.res[id].n) ? '🔥' : '';
-    var ans = g.phase === 'q' && !c.fin && E.answered(r, id) ? ' ✓' : '';
-    return '<span class="sc' + (id === S.me ? ' me' : '') + '"><b>' + (i + 1) + '</b><i style="background:' + col(p.col) + '"></i>' + esc(p.name) + ' <small>' + (c.fin ? '' : 'L' + lap + ' · ') + c.d + ans + '</small>' + ic + '</span>';
-  }).join('');
+// one thin lane per racer, static car icon; moves only after a result (quick <300 ms slide)
+function renderRaceBar(slide) {
+  var r = S.room, g = r.g, el = $('#racebar'), key = g.order.join(',');
+  if (el.dataset.key !== key) {
+    el.dataset.key = key;
+    el.innerHTML = '<div class="rbhead"><span>START</span><span>ലാപ്പ് 2</span><span>ലാപ്പ് 3</span><span>🏁</span></div>' + g.order.map(function (id) {
+      var p = r.players[id] || {};
+      return '<div class="lane' + (id === S.me ? ' me' : '') + '" data-id="' + esc(id) + '"><span class="ln">' + esc(p.name) + '</span><span class="lt"><i class="lm l1"></i><i class="lm l2"></i><span class="lcar">' + carSvg(col(p.col), 26) + '</span></span><span class="ls"></span></div>';
+    }).join('');
+  }
+  el.classList.toggle('slide', !!slide);
+  if (slide) void el.offsetWidth; // apply the old position first, then slide once
+  g.order.forEach(function (id) {
+    var row = el.querySelector('.lane[data-id="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]'); if (!row) return;
+    var c = g.cars[id], pct = Math.max(0, Math.min(1, c.d / E.FINISH));
+    row.querySelector('.lcar').style.left = 'calc(' + (pct * 100) + '% - ' + (pct * 26) + 'px)';
+    row.querySelector('.ls').textContent = c.fin ? '🏁' + c.fin : c.pit ? '🔧' : String(c.d);
+    row.classList.toggle('pit', !!c.pit);
+  });
+}
+function renderLead() {
+  var r = S.room, g = r.g, rank = E.ranking(r), prev = (g.phase === 'rev' && g.resR > 0 && g.prank && g.prank.length) ? g.prank : null; // no arrows after checkpoint 1 (everyone started level)
+  $('#lead').innerHTML = '<div class="leadh">സ്ഥാനങ്ങൾ</div><div class="leadg">' + rank.map(function (id, i) {
+    var p = r.players[id] || {}, c = g.cars[id], ch = prev ? prev.indexOf(id) - i : 0;
+    var arrow = ch > 0 ? '<b class="up">▲' + ch + '</b>' : ch < 0 ? '<b class="dn">▼' + (-ch) + '</b>' : '<b class="eq">–</b>';
+    return '<div class="lr' + (id === S.me ? ' me' : '') + '"><span class="lp">' + (i + 1) + '</span><i style="background:' + col(p.col) + '"></i><span class="lnm">' + esc(p.name) + '</span><span class="ld">' + (c.fin ? '🏁' : c.d) + '</span>' + arrow + '</div>';
+  }).join('') + '</div>';
+}
+function speedoHtml(x) {
+  var ok = x && x.k === 'ok', v = ok ? Math.min(1, x.d / 8) : 0, kmh = ok ? x.d * 25 : 0, ang = -90 + 180 * v;
+  var ticks = ''; for (var i = 0; i <= 8; i++) { var a = (-90 + 22.5 * i) * Math.PI / 180, x1 = 60 + Math.sin(a) * 42, y1 = 62 - Math.cos(a) * 42, x2 = 60 + Math.sin(a) * 50, y2 = 62 - Math.cos(a) * 50; ticks += '<line x1="' + x1.toFixed(1) + '" y1="' + y1.toFixed(1) + '" x2="' + x2.toFixed(1) + '" y2="' + y2.toFixed(1) + '" stroke="' + (i >= 6 ? '#e5484d' : '#93a3c4') + '" stroke-width="2"/>'; }
+  return '<div class="speedo"><svg viewBox="0 0 120 72" width="150" aria-hidden="true"><path d="M10 62 A50 50 0 0 1 110 62" fill="none" stroke="#26355a" stroke-width="8" stroke-linecap="round"/>' +
+    (v > 0 ? '<path d="M10 62 A50 50 0 0 1 ' + (60 + Math.sin(ang * Math.PI / 180) * 50).toFixed(1) + ' ' + (62 - Math.cos(ang * Math.PI / 180) * 50).toFixed(1) + '" fill="none" stroke="' + (x.n ? '#ff8a00' : '#19b46b') + '" stroke-width="8" stroke-linecap="round"/>' : '') + ticks +
+    '<line x1="60" y1="62" x2="' + (60 + Math.sin(ang * Math.PI / 180) * 40).toFixed(1) + '" y2="' + (62 - Math.cos(ang * Math.PI / 180) * 40).toFixed(1) + '" stroke="#f5b301" stroke-width="3.5" stroke-linecap="round"/><circle cx="60" cy="62" r="5" fill="#f5b301"/></svg>' +
+    '<div class="kmh"><b>' + kmh + '</b> km/h</div></div>';
 }
 function ringHtml(L, rem) {
   return '<div class="ring"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="44" stroke="#26355a" stroke-width="9" fill="none"/><circle id="tarc" cx="50" cy="50" r="44" stroke="#19b46b" stroke-width="9" fill="none" stroke-linecap="round" stroke-dasharray="276.5" stroke-dashoffset="0"/></svg><div class="num"><span id="tnum">' + fmtT(rem) + '</span><small>' + (L >= 60 ? (L / 60) + ' മി.' : L + ' സെ.') + '</small></div></div>';
@@ -472,16 +496,19 @@ function qCard(x, mode, sel, revealA) {
 }
 function renderPanel() {
   var r = S.room, g = r.g, c = myCar(), now = serverNow(), h = '', key;
-  if (g.phase === 'count') { key = 'count' + g.seq; h = '<div class="card wait center">🚦 റേസ് തുടങ്ങുന്നു… എല്ലാ കാറുകളും സ്റ്റാർട്ടിങ് ഗ്രിഡിൽ</div>'; }
+  if (g.phase === 'count') { key = 'count' + g.seq; h = '<div class="card wait center">🚦 റേസ് തുടങ്ങുന്നു… <b id="countN"></b><div class="small">ഓരോ ചോദ്യത്തിനും ആദ്യം 3 സെക്കൻഡ് വായിക്കാൻ സമയം</div></div>'; }
   else if (g.phase === 'q') {
     var mine = c && !c.fin, done = mine && E.answered(r, S.me), x = E.questionFor(r, mine ? S.me : g.order.filter(function (id) { return !g.cars[id].pit; })[0] || g.order[0], QS);
     var waitN = E.waitIds(r).length, ansN = E.waitIds(r).filter(function (id) { return E.answered(r, id); }).length;
-    key = 'q' + g.seq + (done ? 'd' : '') + (mine ? 'm' : '');
+    var reading = now < g.startAt; S.wasReading = reading;
+    key = 'q' + g.seq + (done ? 'd' : '') + (mine ? 'm' : '') + (reading ? 'r' : '');
     var an = $('#ansN'); if (an) an.textContent = ansN + '/' + waitN;
     if (S.panelKey === key) return;
-    var tag = (mine && c.pit) ? '<div class="tagline pit">🔧 പിറ്റ് സ്റ്റോപ്പ്: റിപ്പയർ ചോദ്യം. ശരിയായാൽ കാർ തിരികെ റേസിൽ</div>' : '<div class="tagline">🏁 ലാപ്പ് ' + lapCp(g).lap + ' · ചെക്ക്പോയിന്റ് ' + lapCp(g).cp + '</div>';
-    h = '<div class="card qcard">' + tag + '<div class="qhead">' + ringHtml(g.limit, (g.endAt - now) / 1000) + '<div class="qmeta"><div id="gain" class="gain"></div><button class="btn sec sm" data-act="speakQ">🔊 വീണ്ടും കേൾക്കുക</button>' + (S.solo ? '' : '<div class="small">ഉത്തരം നൽകിയവർ: <b id="ansN">' + ansN + '/' + waitN + '</b></div>') + '</div></div>';
-    if (mine && !done) h += qCard(x, 'answer');
+    var tag = (mine && c.pit) ? '<div class="tagline pit">🔧 പിറ്റ് സ്റ്റോപ്പ്: റിപ്പയർ ചോദ്യം. ശരിയായാൽ കാർ തിരികെ റേസിൽ</div>' : '<div class="tagline">ചോദ്യം ' + (g.r + 1) + '/' + E.ROUNDS + '</div>';
+    h = '<div class="card qcard">' + tag;
+    if (reading) h += '<div class="qhead"><div class="readbox">വായിക്കൂ… <b id="readN">' + Math.max(1, Math.ceil((g.startAt - now) / 1000)) + '</b></div><div class="qmeta"><div class="small">ഉത്തരം നൽകാനുള്ള ' + limitTxt(g.limit) + ' ഇതിനു ശേഷം തുടങ്ങും</div><button class="btn sec sm" data-act="speakQ">🗣️ വീണ്ടും കേൾക്കുക</button></div></div>';
+    else h += '<div class="qhead">' + ringHtml(g.limit, (g.endAt - now) / 1000) + '<div class="qmeta"><div id="gain" class="gain"></div><button class="btn sec sm" data-act="speakQ">🗣️ വീണ്ടും കേൾക്കുക</button>' + (S.solo ? '' : '<div class="small">ഉത്തരം നൽകിയവർ: <b id="ansN">' + ansN + '/' + waitN + '</b></div>') + '</div></div>';
+    if (mine && !done) h += qCard(x, reading ? 'view' : 'answer');
     else if (mine && done) h += qCard(x, 'view', (g.ans[S.me] || {}).i) + '<div class="wait">✅ ഉത്തരം നൽകി. മറ്റുള്ളവരെ കാത്തിരിക്കുന്നു…</div>';
     else if (c && c.fin) h += '<div class="wait">🏁 നിങ്ങൾ ഫിനിഷ് ചെയ്തു (സ്ഥാനം ' + c.fin + '). മറ്റുള്ളവർ ഓടുന്നു…</div>' + qCard(x, 'view');
     else h += '<div class="wait">👀 കാണി: ചോദ്യം കാണാം, ഉത്തരം നൽകാൻ പറ്റില്ല</div>' + qCard(x, 'view');
@@ -492,14 +519,16 @@ function renderPanel() {
     h = '<div class="card">';
     if (res) {
       var xq = E.qOf(QS, res.s + '|' + res.i, res.pm).q || { q: '', o: [] }; // same option order the player saw
-      h += '<div class="resline ' + res.k + '">' + resText(res) + '</div>' + qCard({ q: xq }, 'view', res.c >= 0 ? res.c : null, xq.a);
+      var good = res.k === 'ok' || res.k === 'fix';
+      h += '<div class="resrow">' + speedoHtml(res) + '<div class="resline ' + res.k + '">' + resText(res) + '</div></div>' +
+        '<div class="ansline"><div class="small">' + esc(xq.q) + '</div>' + (!good && res.c >= 0 ? '<div class="ra bad">നിങ്ങൾ: ' + esc(xq.o[res.c]) + '</div>' : '') + '<div class="ra good">ശരിയുത്തരം: ' + esc(xq.o[xq.a]) + '</div></div>';
     } else h += '<div class="wait">ഈ ചെക്ക്പോയിന്റിലെ ഫലം</div>';
-    h += '<div class="rlist">' + g.order.filter(function (id) { return g.res[id]; }).map(function (id) { var x2 = g.res[id], p = r.players[id] || {}; return '<div class="rrow"><i style="background:' + col(p.col) + '"></i><span>' + esc(p.name) + '</span><b class="' + x2.k + '">' + shortRes(x2) + '</b></div>'; }).join('') + '</div></div>';
+    h += '</div>';
   } else { key = 'x'; h = ''; }
   if (S.panelKey === key) return;
   S.panelKey = key;
-  h += '<button class="btn sec sm leavebtn" data-act="leave">' + (S.solo ? 'സോളോ നിർത്തുക' : 'റൂം വിടുക') + '</button>';
   $('#panel').innerHTML = h;
+  var gf = $('#gameFoot'); if (gf && !gf.innerHTML) gf.innerHTML = '<button class="btn sec sm leavebtn" data-act="leave">' + (S.solo ? 'സോളോ നിർത്തുക' : 'റൂം വിടുക') + '</button>';
   tick();
 }
 function resText(x) {
@@ -511,16 +540,9 @@ function resText(x) {
   return '';
 }
 function shortRes(x) { return x.k === 'ok' ? (x.n ? '🔥 +' : '+') + x.d + (x.fin ? ' 🏁' + x.fin : '') : x.k === 'wrong' ? '💥 തെറ്റ്' : x.k === 'to' ? '⏰ സമയം' : x.k === 'fix' ? '🔧 ശരിയായി' : '🔧 പിറ്റിൽ'; }
-function resultPop() {
-  var x = S.room.g.res[S.me]; if (!x) return;
-  var cls = x.k === 'ok' ? (x.n ? 'nitro' : 'good') : x.k === 'fix' ? 'good' : 'bad';
-  var big = x.k === 'ok' ? (x.n ? '🔥 NITRO +' + x.d : '+' + x.d) : x.k === 'fix' ? '🔧 റിപ്പയർ OK' : x.k === 'pitfail' ? '🔧 ഇനിയും പിറ്റിൽ' : '💥 ബ്രേക്ക്ഡൗൺ';
-  var p = $('#pop'); p.className = 'pop ' + cls; p.innerHTML = '<div class="in"><div class="big">' + big + '</div><div class="sub">' + esc(resText(x)) + '</div></div>'; p.hidden = false;
-  clearTimeout(resultPop.t); resultPop.t = setTimeout(function () { p.hidden = true; }, 1500);
-}
 function renderResult() {
   var r = S.room, g = r.g, rank = g.rank || E.ranking(r), admin = E.isAdmin(r, S.me);
-  if (S.view) { S.view.destroy(); S.view = null; } var tw = $('#track'); if (tw) $('#game').innerHTML = '';
+  $('#game').innerHTML = '';
   var pod = [1, 0, 2].map(function (k) {
     var id = rank[k]; if (!id) return '<div class="pod p' + (k + 1) + ' empty"></div>';
     var p = r.players[id] || {}, c = g.cars[id];
@@ -552,6 +574,7 @@ function reviewHtml(r) {
 
 // ------------------------------------------------------------ events
 document.addEventListener('click', function (ev) {
+  audio(); // unlock Web Audio on the first tap (phones need a user gesture)
   var b = ev.target.closest('[data-act]'); if (!b) return;
   var a = b.dataset.act;
   if (a === 'create') createRoom();
@@ -569,12 +592,8 @@ document.addEventListener('click', function (ev) {
   else if (a === 'reset') dispatch({ type: 'reset' });
   else if (a === 'ans') answer(+b.dataset.i);
   else if (a === 'speakQ') { var g = S.room.g; var x = E.questionFor(S.room, g.cars[S.me] && !g.cars[S.me].fin ? S.me : g.order[0], QS); var was = voiceOn(); if (!was) LS.set('zrr_voice', true); speakQ(x.q); if (!was) LS.set('zrr_voice', false); }
+  else if (a === 'sound') { LS.set('zrr_sound', !soundOn()); toast(soundOn() ? 'എഞ്ചിൻ ശബ്ദം ഓൺ' : 'എഞ്ചിൻ ശബ്ദം ഓഫ്', true); if (soundOn()) sfx('vroom'); render(); }
   else if (a === 'voice') { LS.set('zrr_voice', !voiceOn()); if (!voiceOn()) try { speechSynthesis.cancel(); } catch (e) {} toast(voiceOn() ? 'ചോദ്യം ഉറക്കെ വായിക്കും' : 'ശബ്ദം ഓഫ്', true); render(); }
-  else if (a === 'setMode') { LS.set('zrr_mode', b.dataset.m); renderHome(); }
-  else if (a === 'mode') setMode(S.viewMode === '3d' ? 'lite' : '3d');
-  else if (a === 'cam') { if (S.view) S.view.setCam(S.view.cam() === 'follow' ? 'overview' : 'follow'); renderViewBtns(); }
-  else if (a === 'toLite') { $('#sheet').hidden = true; LS.set('zrr_fpsask', 1); setMode('lite'); }
-  else if (a === 'keep3d') { $('#sheet').hidden = true; LS.set('zrr_fpsask', 1); }
   else if (a === 'chatToggle') chatToggle();
   else if (a === 'chatSend') chatSend();
   else if (a === 'copyLink') copy(baseUrl() + '?room=' + S.room.code);

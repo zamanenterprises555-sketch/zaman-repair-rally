@@ -24,7 +24,7 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); 
   await W.goto(BASE); await W.fill('#nameIn', 'കാണി'); await W.fill('#codeIn', code); await W.click('[data-act=joinSpec]'); await W.waitForSelector('.code');
   let s = await until(H, s => true); await H.waitForTimeout(1500);
   const lob = await H.textContent('#lobby'); ok(lob.includes('സിയാദ്') && lob.includes('കാണി') && lob.includes('(2/11)'), 'lobby: 2/11 racers + spectator synced');
-  await top(H); await H.screenshot({ path: SH + '10-lobby-host.png', fullPage: true }); await P.screenshot({ path: SH + '11-lobby-player.png' });
+  await top(H); await H.screenshot({ path: SH + 'v2-mp-10-lobby-host.png', fullPage: true }); await P.screenshot({ path: SH + 'v2-mp-11-lobby-player.png' });
   ok(!(await P.$('[data-act=start]')), 'only host sees start');
   // chat works in the lobby
   await P.click('#chatBtn'); await P.fill('#chatIn', 'ഹലോ, റെഡി!'); await P.click('.chatform [data-act=chatSend]');
@@ -39,14 +39,14 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); 
   // rules: even a direct database write is refused while locked
   const direct = await P.evaluate(() => ZRR.S.chatRef.push({ pid: ZRR.S.me, name: 'x', tm: 'x', text: 'answer is 2', ts: firebase.database.ServerValue.TIMESTAMP }).then(() => 'written', e => 'denied'));
   ok(direct === 'denied', 'Firebase rules refuse chat while a question is live: ' + direct);
-  await P.click('#chatBtn'); await P.waitForTimeout(300); await top(P); await P.screenshot({ path: SH + '12-mp-chat-locked.png' }); await P.click('[data-act=chatToggle]');
+  await P.click('#chatBtn'); await P.waitForTimeout(300); await top(P); await P.screenshot({ path: SH + 'v2-mp-12-mp-chat-locked.png' }); await P.click('[data-act=chatToggle]');
   ok(await W.$$eval('.opt', x => x.length > 0 && x.every(o => o.disabled)), 'spectator sees the question read-only');
   // host fast correct, P wrong
   let a = await correct(H); await H.click(`[data-act=ans][data-i="${a}"]`);
   let ap = await correct(P); await P.click(`[data-act=ans][data-i="${(ap + 1) % 4}"]`);
   s = await until(W, s => s.phase === 'rev', 8000); ok(s.phase === 'rev', 'round resolved as soon as both answered');
   const hr = await st(H), pr = await st(P); ok(hr.res.k === 'ok' && hr.car.d >= 4, 'host moved +' + hr.res.d); ok(pr.res.k === 'wrong' && pr.car.pit === 1, 'player 2 breakdown → pit');
-  await W.waitForTimeout(1500); await top(W); await W.screenshot({ path: SH + '13-mp-spectator-reveal.png' });
+  await W.waitForTimeout(1500); await top(W); await W.screenshot({ path: SH + 'v2-mp-13-mp-spectator-reveal.png' });
   // round 2: P has pit question; reload P (app closed) → auto-rejoin
   s = await until(P, s => s.phase === 'q' && s.r === 1, 10000);
   await P.close(); P = await pg(pc); await P.goto(BASE);
@@ -64,11 +64,11 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); 
     const sq = s.seq;
     for (const X of [H, P]) { const x = await st(X); if (x.car && !x.car.fin && x.phase === 'q') { const c = await correct(X); await X.click(`[data-act=ans][data-i="${c}"]`).catch(() => {}); } }
     s = await until(H, s => s.status !== 'racing' || (s.phase === 'rev' && s.seq > sq), 15000);
-    if (s.res && s.res.n && !H.nshot) { H.nshot = 1; await H.waitForTimeout(1300); await top(H); await H.screenshot({ path: SH + '14-mp-nitro-host.png' }); }
+    if (s.res && s.res.n && !H.nshot) { H.nshot = 1; await H.waitForTimeout(1300); await top(H); await H.screenshot({ path: SH + 'v2-mp-14-mp-nitro-host.png' }); }
   }
   s = await until(W, s => s.status === 'finished', 20000); ok(s.status === 'finished', 'race finished on spectator phone too');
-  await W.waitForTimeout(700); await top(W); await W.screenshot({ path: SH + '15-mp-podium-spectator.png' });
-  await P.waitForTimeout(500); await P.screenshot({ path: SH + '16-mp-result-review.png', fullPage: true });
+  await W.waitForTimeout(700); await top(W); await W.screenshot({ path: SH + 'v2-mp-15-mp-podium-spectator.png' });
+  await P.waitForTimeout(500); await P.screenshot({ path: SH + 'v2-mp-16-mp-result-review.png', fullPage: true });
   const ptxt = await P.textContent('#result'); ok(ptxt.includes('ശരിയുത്തരം'), 'player 2 sees review of wrong answers');
   const s2 = await st(P); ok(s2.chat >= 1 && !s2.locked, 'chat open again after race');
   // rematch → lobby → new shuffled order

@@ -1,6 +1,6 @@
 # Zaman Repair Rally 🏁
 
-A 3D car-racing quiz game that teaches smartphone technology, made for **Zaman Smartphone Repair Academy, Valanchery**.
+A calm car-racing quiz game that teaches smartphone technology, made for **Zaman Smartphone Repair Academy, Valanchery**.
 It's free to host and run: GitHub Pages for the site and the free Firebase Spark plan (Realtime Database) for the rooms and chat.
 
 **Live:** https://zamanenterprises555-sketch.github.io/zaman-repair-rally/
@@ -15,7 +15,14 @@ It's free to host and run: GitHub Pages for the site and the free Firebase Spark
 - **Battery (fuel):** starts at 100 %. Driving costs 4 % and a correct answer gives +6 %. A correct battery, charging or power question gives a further +14 %. A wrong answer costs 15 %. Below 20 % the car is slower by 1 step. A pit repair charges the battery to 60 %.
 - **Nitro:** 3 correct answers in a row give a boost of +3 steps, with flames. It uses 12 % battery and needs at least 15 %.
 - At the end there's a podium for 1st, 2nd and 3rd, a full result table, a review of wrong answers with the correct answers, and an academy button.
-- Questions are read aloud in Malayalam (🔊 toggle) if the phone has a Malayalam voice.
+- **Reading time:** every question (including pit-stop questions) first shows a calm «വായിക്കൂ… 3» for 3 seconds. Answers are disabled during that time, and the answer timer and steps count only from after it. In multiplayer this is synced through the start time stored in the room.
+- **Calm screen (v2):** no 3D and no motion animations. While a question is on screen, only the question is shown. At the result moment you see:
+  - a speedometer: needle high for a fast correct answer, 0 for wrong or time-out;
+  - a simple race bar with one thin lane per racer and a static car icon (cars move with one quick 0.25 s slide, only after the result);
+  - a compact leaderboard with ▲/▼ position change;
+  - «ലാപ്പ് x/3 · ചെക്ക്പോയിന്റ് y/10».
+- **Engine sounds** (🔊 toggle, saved) are made in code with the Web Audio API, so there are no sound files: a "vroom" for a correct answer, a "tuk tuk" sputter for a breakdown, a nitro whoosh, and a click for a pit repair. They play only at the result moment, never during a question.
+- Questions are read aloud in Malayalam (🗣️ toggle) if the phone has a Malayalam voice.
 - Free text chat (no mic). It is **locked while a question is live**, both in the app and in the Firebase rules.
 
 ## Files
@@ -23,9 +30,7 @@ It's free to host and run: GitHub Pages for the site and the free Firebase Spark
 |---|---|
 | `questions.js` | Exactly the same file as Zaman Cricket Quiz (not edited) |
 | `engine.js` | Pure race rules, used by both Solo and multiplayer (Firebase transactions) |
-| `view.js` | Race view: Three.js 3D (low-poly cars made from geometry, tinted windows, no people) plus a **Lite mode** 2D canvas |
-| `app.js` | UI, rooms, chat, speech, solo computer cars |
-| `vendor/three.min.js` | Three.js r149, MIT licence (`vendor/THREE-LICENSE.txt`) |
+| `app.js` | UI (race bar, leaderboard, speedometer), rooms, chat, speech, Web Audio engine sounds, solo computer cars |
 | `database.rules.json` | Merged Firebase rules: cricket `rooms`/`chat` unchanged, plus `rallyRooms`/`rallyChat` |
 | `sw.js`, `manifest.json` | PWA (network-first, works offline after the first visit) |
 | `tests/` | `engine.test.js` (node), plus `solo.e2e.js`, `multi.e2e.js` and `eleven.e2e.js` (Playwright, 390×844) |
@@ -34,6 +39,3 @@ It's free to host and run: GitHub Pages for the site and the free Firebase Spark
 Data lives under `rallyRooms/{CODE}` and `rallyChat/{CODE}`, separate from the cricket quiz's `rooms/` and `chat/`.
 The rules allow no listing, single-room reads, at most 11 racers, chat locked during a question, and deleting rooms only after 24 h. The app removes rooms older than 24 h automatically.
 **Multiplayer needs these rules published** (Firebase console → Realtime Database → Rules → paste `database.rules.json` → Publish). Solo works without them.
-
-## Lite mode
-If WebGL is missing, the game switches to Lite (2D) on its own. If 3D runs below about 22 FPS, it offers to switch. You can also switch any time with the button on the track.
