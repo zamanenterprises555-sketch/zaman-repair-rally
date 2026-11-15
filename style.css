@@ -121,9 +121,9 @@ a.btn{text-decoration:none}
 .bat.mid i{background:linear-gradient(90deg,#c98a00,#f5b301)}.bat.low i{background:linear-gradient(90deg,#a3161b,#e5484d);animation:blink 1s infinite}
 .bat span{position:relative;display:block;text-align:center;font-weight:800;font-size:.74rem;line-height:20px;text-shadow:0 1px 2px #000}
 @keyframes blink{50%{opacity:.55}}
-.nitro{display:flex;gap:3px;align-items:center;background:rgba(10,16,30,.8);border-radius:11px;padding:3px 8px;height:22px}
-.nitro i{width:9px;height:9px;border-radius:50%;background:#3a4560}.nitro i.on{background:#ff8a00;box-shadow:0 0 6px #ff8a00}
-.nitro span{font-size:.74rem;font-weight:800;margin-left:3px}
+.nitrob{display:flex;gap:3px;align-items:center;background:rgba(10,16,30,.8);border-radius:11px;padding:3px 8px;height:22px}
+.nitrob i{width:9px;height:9px;border-radius:50%;background:#3a4560}.nitrob i.on{background:#ff8a00;box-shadow:0 0 6px #ff8a00}
+.nitrob span{font-size:.74rem;font-weight:800;margin-left:3px}
 .viewbtns{position:absolute;left:8px;right:8px;bottom:8px;display:flex;gap:6px;justify-content:flex-end}
 .vbtn{border:none;border-radius:10px;background:rgba(10,16,30,.8);color:#fff;font:inherit;font-size:.74rem;padding:6px 10px;cursor:pointer}
 .countwrap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(5,10,20,.35);pointer-events:none}

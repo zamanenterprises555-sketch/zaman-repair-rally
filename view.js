@@ -387,7 +387,8 @@
       var labels = [];
       list.forEach(function (st) {
         var u = advance(st, tn, dt), p = at(u, st.lat), Q = P(p.x, p.z), ang = Math.atan2(p.dz, p.dx);
-        var L = Math.max(10, 2.2 * sc * 1.25), Wd = Math.max(6, 1.1 * sc * 1.25);
+        var L = Math.max(15, 2.2 * sc * 1.7), Wd = Math.max(8, 1.1 * sc * 1.7);
+        if (st.me) { x.fillStyle = 'rgba(245,179,1,.35)'; x.beginPath(); x.arc(Q[0], Q[1], L * 0.95, 0, 7); x.fill(); }
         if (tn < st.nitroUntil) { x.save(); x.translate(Q[0], Q[1]); x.rotate(ang); x.fillStyle = Math.random() < 0.5 ? '#ff8a00' : '#ffd34d'; x.beginPath(); x.moveTo(-L / 2, -Wd / 3); x.lineTo(-L / 2 - L * (0.6 + Math.random() * 0.5), 0); x.lineTo(-L / 2, Wd / 3); x.fill(); x.restore(); }
         if ((tn < st.smokeUntil || st.pit) && Math.random() < 0.3) smoke.push({ x: Q[0], y: Q[1], r: 3, a: 0.7 });
         x.save(); x.translate(Q[0], Q[1]); x.rotate(ang);

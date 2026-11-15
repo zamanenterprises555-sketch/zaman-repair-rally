@@ -1,5 +1,5 @@
 // Zaman Repair Rally service worker. Bump VERSION on every release.
-const VERSION = 'zrr-v1.0.0';
+const VERSION = 'zrr-v1.0.1';
 const ASSETS = ['./', './index.html', './style.css', './engine.js', './view.js', './app.js', './questions.js', './manifest.json', './icon.svg', './icon-192.png', './icon-512.png', './vendor/three.min.js'];
 self.addEventListener('install', e => {
   self.skipWaiting();

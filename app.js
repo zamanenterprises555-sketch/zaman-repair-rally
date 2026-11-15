@@ -445,7 +445,7 @@ function renderHud() {
     var bcls = c.b < E.BAT_LOW ? 'low' : c.b < 50 ? 'mid' : '';
     h += '<div class="hud-r"><b>' + (c.fin ? '🏁 ' : '') + pos + '<small>/' + g.order.length + '</small></b><span>സ്ഥാനം</span></div>';
     h += '<div class="hud-b"><div class="bat ' + bcls + '"><i style="width:' + Math.max(0, Math.min(100, c.b)) + '%"></i><span>🔋 ബാറ്ററി ' + Math.round(c.b) + '%</span></div>' +
-      '<div class="nitro" title="നൈട്രോ">' + [0, 1, 2].map(function (k) { return '<i class="' + (k < (c.st % 3) ? 'on' : '') + '"></i>'; }).join('') + '<span>🔥' + (c.nit || 0) + '</span></div></div>';
+      '<div class="nitrob" title="നൈട്രോ">' + [0, 1, 2].map(function (k) { return '<i class="' + (k < (c.st % 3) ? 'on' : '') + '"></i>'; }).join('') + '<span>🔥' + (c.nit || 0) + '</span></div></div>';
   } else h += '<div class="hud-r"><b>👀</b><span>കാണി</span></div>';
   $('#hud').innerHTML = h;
 }
