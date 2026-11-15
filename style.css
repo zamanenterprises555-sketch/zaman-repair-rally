@@ -82,7 +82,7 @@ body{background:radial-gradient(120% 60% at 50% -10%,#3a1620 0%,var(--bg) 60%)}
 .prow .pn{flex:1;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .carsvg{flex:none;display:inline-block;vertical-align:middle}
 .setgrp{margin:6px 0 10px}.setgrp-h{font-size:.85rem;font-weight:700;margin-bottom:4px}
-.setbtn{display:inline-block;margin:3px 4px 3px 0;padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:#0e1730;color:var(--txt);font:inherit;font-size:.82rem;cursor:pointer}
+.setbtn{display:inline-block;margin:4px 6px 4px 0;padding:12px 16px;min-height:44px;touch-action:manipulation;-webkit-tap-highlight-color:transparent;border-radius:10px;border:1px solid var(--line);background:#0e1730;color:var(--txt);font:inherit;font-size:.82rem;cursor:pointer}
 .setbtn.sel{background:var(--grn);color:#03140b;border-color:var(--grn);font-weight:800}
 .setbtn[disabled]{opacity:.6;cursor:default}.setbtn.sel[disabled]{opacity:1}
 .soon{font-size:.8rem;color:var(--mut);padding:4px 0}

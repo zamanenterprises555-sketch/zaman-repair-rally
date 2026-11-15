@@ -370,7 +370,7 @@ function setPicker(selected, canPick, act) {
     var h = '<div class="setgrp"><div class="setgrp-h">' + esc(grp.type.ml) + ' <span class="small">· ' + limitTxt(grp.type.limit) + '</span></div>';
     if (!grp.sets.some(function (s) { return s.ok; })) return h + '<div class="soon">ഉടൻ വരുന്നു</div></div>';
     return h + grp.sets.filter(function (s) { return s.ok; }).map(function (s) {
-      return '<button class="setbtn' + (s.name === selected ? ' sel' : '') + '"' + (canPick ? ' data-act="' + act + '" data-set="' + esc(s.name) + '"' : ' disabled') + '>' + esc(s.name) + '</button>';
+      return '<button class="setbtn' + (s.name === selected ? ' sel' : '') + '"' + (canPick ? ' data-act="' + act + '" data-set="' + esc(s.name) + '"' : ' disabled') + '>' + (s.name === selected ? '✓ ' : '') + esc(s.name) + '</button>';
     }).join('') + '</div>';
   }).join('');
 }
@@ -387,10 +387,20 @@ function rulesHtml() {
     '<li>ഒരു റൂമിൽ 2 മുതൽ 11 വരെ റേസർമാർ. ബാക്കിയുള്ളവർക്ക് കാണിയായി കാണാം.</li></ul></details>';
 }
 function academyBtn() { return '<a class="btn gold academy" href="' + ACADEMY + '" target="_blank" rel="noopener">🎓 Zaman Smartphone Repair Academy-യിൽ ചേരൂ</a>'; }
+function pickHomeSet(name) {
+  if (!E.setPlayable(QS, name)) return;
+  S.homeSet = name; LS.set('zrr_set', name);
+  var bs = document.querySelectorAll('#home .setbtn');
+  for (var i = 0; i < bs.length; i++) { var on = bs[i].dataset.set === name; bs[i].classList.toggle('sel', on); bs[i].textContent = (on ? '✓ ' : '') + bs[i].dataset.set; }
+  var n = $('#soloSetNow'); if (n) n.textContent = name;
+  toast('സെറ്റ്: ' + name);
+}
 function renderHome() {
   var ses = LS.get('zrr_session'), solo = LS.get('zrr_solo'), name = LS.get('zrr_name', '');
   var pre = (new URLSearchParams(location.search)).get('room') || '';
+  if (!S.homeSet) S.homeSet = LS.get('zrr_set', null);
   if (!S.homeSet || !E.setPlayable(QS, S.homeSet)) S.homeSet = firstPlayable();
+  var keepName = $('#nameIn') ? $('#nameIn').value : null, keepBots = $('#soloBots') ? $('#soloBots').value : null;
   var nb = LS.get('zrr_bots', 3);
   var h = '<div class="hero"><div class="heroCar">' + carSvg('#e53935', 120) + '</div><h1>ZAMAN <span>REPAIR RALLY</span></h1><p>സ്മാർട്ട്ഫോൺ ടെക്നോളജി ക്വിസ് കാർ റേസ് 🏁</p></div>';
   if (ses && ses.code && db) h += '<div class="card rejoin"><b>🔁 നിങ്ങളുടെ റൂം: ' + esc(ses.code) + '</b><button class="btn" data-act="rejoin">തിരികെ റേസിലേക്ക്</button><button class="btn sec sm" data-act="forget" style="margin-top:8px">മറക്കുക</button></div>';
@@ -401,13 +411,15 @@ function renderHome() {
     '<button class="btn sec sm" data-act="joinSpec" style="margin-top:8px">👀 കാണിയായി മാത്രം ജോയിൻ</button></div>';
   h += '<div class="card"><h3>🎮 സോളോ റേസ് (ഒറ്റയ്ക്ക് പരിശീലനം)</h3><p class="mut">എല്ലാ നിയമങ്ങളും ഉണ്ട്. കമ്പ്യൂട്ടർ കാറുകളോട് മത്സരിക്കാം.</p>' +
     '<label class="lbl">കമ്പ്യൂട്ടർ കാറുകൾ (0–10)</label><select id="soloBots">' + [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(function (i) { return '<option value="' + i + '"' + (i === nb ? ' selected' : '') + '>' + i + (i === 10 ? ' (ആകെ 11 കാർ)' : '') + '</option>'; }).join('') + '</select>' +
-    '<label class="lbl">ചോദ്യ സെറ്റ്</label>' + setPicker(S.homeSet, true, 'homeSet') +
+    '<label class="lbl">ചോദ്യ സെറ്റ് (തൊട്ട് തിരഞ്ഞെടുക്കുക)</label>' + setPicker(S.homeSet, true, 'homeSet') + '<p class="small">തിരഞ്ഞെടുത്ത സെറ്റ്: <b id="soloSetNow">' + esc(S.homeSet || '') + '</b></p>' +
     '<button class="btn gold" data-act="solo">സോളോ റേസ് തുടങ്ങുക</button></div>';
   h += '<div class="card"><h3>⚙️ ക്രമീകരണം</h3><div class="row"><button class="btn ' + (soundOn() ? '' : 'sec') + ' sm" data-act="sound">' + (soundOn() ? '🔊 എഞ്ചിൻ ശബ്ദം: ഓൺ' : '🔇 എഞ്ചിൻ ശബ്ദം: ഓഫ്') + '</button></div>' +
     '<div class="row" style="margin-top:8px"><button class="btn ' + (voiceOn() ? '' : 'sec') + ' sm" data-act="voice">' + (voiceOn() ? '🗣️ ചോദ്യം വായിക്കും' : '🗣️ ചോദ്യം വായിക്കില്ല') + '</button></div>' +
-    (('speechSynthesis' in window) && !mlVoice() ? '<p class="small">ഈ ഫോണിൽ മലയാളം ശബ്ദം കണ്ടില്ല. ഉണ്ടെങ്കിൽ മാത്രം വായിക്കും.</p>' : '') + '<p class="small">എഞ്ചിൻ ശബ്ദം ഫലം വരുമ്പോൾ മാത്രം, ചോദ്യ സമയത്ത് ഇല്ല.</p></div>';
+    (('speechSynthesis' in window) && !mlVoice() ? '<p class="small" id="voiceNote">ഈ ഫോണിൽ മലയാളം ശബ്ദം കണ്ടില്ല. ഉണ്ടെങ്കിൽ മാത്രം വായിക്കും.</p>' : '') + '<p class="small">എഞ്ചിൻ ശബ്ദം ഫലം വരുമ്പോൾ മാത്രം, ചോദ്യ സമയത്ത് ഇല്ല.</p></div>';
   h += rulesHtml() + academyBtn() + '<p class="small foot">© Zaman Enterprises, Valanchery · ചോദ്യങ്ങൾ: Zaman Cricket Quiz</p>';
   $('#home').innerHTML = h;
+  if (keepName !== null && $('#nameIn')) $('#nameIn').value = keepName;
+  if (keepBots !== null && $('#soloBots')) $('#soloBots').value = keepBots;
 }
 function renderLobby() {
   var r = S.room, me = r.players[S.me] || {}, admin = E.isAdmin(r, S.me), racers = E.racerIds(r);
@@ -592,7 +604,7 @@ document.addEventListener('click', function (ev) {
   else if (a === 'rejoin') { var s = LS.get('zrr_session'); if (s) connect(s.code, s.pid, s.name, s.tok); }
   else if (a === 'forget') { LS.del('zrr_session'); render(); }
   else if (a === 'leave') { if (S.room && S.room.status === 'racing' && !confirm('റേസിൽ നിന്ന് പുറത്തുപോകണോ?')) return; leave(); }
-  else if (a === 'homeSet') { S.homeSet = b.dataset.set; renderHome(); }
+  else if (a === 'homeSet') { pickHomeSet(b.dataset.set); }
   else if (a === 'roomSet') dispatch({ type: 'setSet', set: b.dataset.set });
   else if (a === 'role') dispatch({ type: 'role', role: b.dataset.r });
   else if (a === 'start') dispatch({ type: 'start', seed: (Math.random() * 4294967295) >>> 0 });
@@ -616,7 +628,7 @@ function copy(t, msg) {
 
 // ------------------------------------------------------------ boot
 function boot() {
-  try { speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged = function () { if (!S.room) renderHome(); }; } catch (e) {}
+  try { speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged = function () { var n = $('#voiceNote'); if (n && mlVoice()) n.remove(); }; } catch (e) {}
   S.tick = setInterval(tick, 200);
   var qp = new URLSearchParams(location.search);
   render();
